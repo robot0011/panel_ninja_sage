@@ -36,7 +36,7 @@ def fight_cd_event():
         
         time.sleep(10)
 
-        battle_dmg = random.randint(5000, 10000)
+        battle_dmg = 0
         hash_input = str(char_id) + str(boss_id) + event_battle_data['code'] + str(battle_dmg) + battle_hash
         mission_hash = CUCSG.hash(hash_input)
         parameters = [char_id, boss_id, event_battle_data['code'], battle_dmg, mission_hash, battle_hash, session_key]
@@ -95,7 +95,7 @@ def fight_pumpkin_event(enemy_id=None):
         event_battle_data = send_amf_request("HalloweenEvent2025.startBattle", parameters)
         
         time.sleep(10)
-        battle_dmg = random.randint(5000, 10000)
+        battle_dmg = 0
 
         hash_input = str(char_id) + str(enemy_id) + event_battle_data['code'] + str(battle_dmg) + battle_hash
         mission_hash = CUCSG.hash(hash_input)
@@ -147,7 +147,7 @@ def fight_yinyang_event(enemy_id=None):
         
         time.sleep(10)
 
-        battle_dmg = random.randint(5000, 10000)
+        battle_dmg = 0
         hash_input = str(char_id) + str(enemy_id) + event_battle_data['code'] + str(battle_dmg) + battle_hash
         mission_hash = CUCSG.hash(hash_input)
         parameters = [char_id, enemy_id, event_battle_data['code'], battle_dmg, mission_hash, battle_hash, session_key]
@@ -202,7 +202,7 @@ def fight_gi_event(enemy_id=None):
         
         time.sleep(10)
 
-        battle_dmg = random.randint(5000, 10000)
+        battle_dmg = 0
 
         hash_input = str(char_id) + str(enemy_id) + event_battle_data['code'] + str(battle_dmg) + battle_hash
         mission_hash = CUCSG.hash(hash_input)
