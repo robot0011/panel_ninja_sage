@@ -1,0 +1,12 @@
+[project]
+name = "panel"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "keyboard>=0.13.5",
+    "py3amf>=0.8.12",
+    "pycryptodome>=3.23.0",
+    "requests>=2.32.5",
+]
