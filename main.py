@@ -12,6 +12,7 @@ from utils import save_to_json, open_json_to_dict
 from eudemon import fight_eudemon_boss
 from event import fight_cd_event, fight_pumpkin_event, fight_yinyang_event, fight_gi_event
 from event_finisher import event_finisher
+from shadow_war import shadow_war_event
 
 
 class NinjaSageApp:
@@ -153,9 +154,10 @@ class NinjaSageApp:
         print("4. Fight Pumpkin Event Boss")
         print("5. Fight Yin Yang Event Boss")
         print("6. Fight Independence Event Boss")
-        print("7. Event Finisher")
-        print("8. See character details")
-        print("9. Exit")
+        print("7. Shadow War")
+        print("8. Event Finisher")
+        print("9. See character details")
+        print("0. Exit")
 
     def handle_user_action(self, action: int):
         """Handle user menu selection"""
@@ -166,9 +168,10 @@ class NinjaSageApp:
             4: (fight_pumpkin_event, "Starting Pumpkin Event Fight... press q to stop fighting"),
             5: (fight_yinyang_event, "Starting Yin Yang event Fight... press q to stop fighting"),
             6: (fight_gi_event, "Starting Independence event Fight... press q to stop fighting"),
-            7: (event_finisher, "Starting Event Finisher... press q to stop fighting"),
-            8: (self.display_character_info, ""),
-            9: (self.exit_app, "Exiting...")
+            7: (shadow_war_event, "Starting Shadow War Event... press q to stop fighting"),
+            8: (event_finisher, "Starting Event Finisher... press q to stop fighting"),
+            9: (self.display_character_info, ""),
+            0: (self.exit_app, "Exiting...")
         }
         
         if action in action_handlers:
@@ -178,10 +181,7 @@ class NinjaSageApp:
                 print("")
                 print(message)
             
-            if action == 8:
-                handler()
-            else:
-                handler()
+            handler()
         else:
             print("Invalid choice. Please try again.")
         
@@ -197,9 +197,6 @@ class NinjaSageApp:
             return
         
         self.display_welcome()
-        
-        # Download resources if needed
-        # download_all_resources()
         
         if not self.handle_login():
             return
