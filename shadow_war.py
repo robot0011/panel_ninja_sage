@@ -1,6 +1,6 @@
 import config
 import time
-from utils import flatten_json, send_amf_request, open_json_to_dict, CUCSG
+from utils import flatten_json, send_amf_request, open_json_to_dict, CUCSG, save_fight_data
 
 
 class ShadowWarEvent:
@@ -60,6 +60,7 @@ class ShadowWarEvent:
 
             # Finish battle and get rewards
             battle_result = self.finish_battle(battle_data['id'])
+            save_fight_data(battle_result)
             if battle_result.get("status") == 1:
                 xp_gained = battle_result["result"][0]
                 gold_gained = battle_result["result"][1]
