@@ -1,8 +1,12 @@
 import os
 import json
 import time
-import keyboard
+import threading
+import tkinter as tk
+from tkinter import ttk, messagebox, scrolledtext
 from typing import Dict, Any, Optional, List
+import sys
+import io
 
 import config
 import amf_req
@@ -15,23 +19,321 @@ from event_finisher import event_finisher
 from shadow_war import shadow_war_event
 
 
-class NinjaSageApp:
+class TextRedirector(io.TextIOBase):
+    """Redirects stdout/stderr to a Tkinter Text widget"""
+    
+    def __init__(self, text_widget, tag="stdout"):
+        self.text_widget = text_widget
+        self.tag = tag
+        
+    def write(self, string):
+        self.text_widget.insert(tk.END, string, (self.tag,))
+        self.text_widget.see(tk.END)
+        self.text_widget.update_idletasks()
+        
+    def flush(self):
+        pass
+
+
+class LogWindow:
+    """Separate window for displaying logs and terminal output"""
+    
+    def __init__(self, parent):
+        self.parent = parent
+        self.window = None
+        self.text_widget = None
+        self.original_stdout = sys.stdout
+        self.original_stderr = sys.stderr
+        
+    def show(self):
+        """Show the log window"""
+        if self.window and self.window.winfo_exists():
+            self.window.lift()
+            self.window.focus_force()
+            return
+            
+        self.window = tk.Toplevel(self.parent)
+        self.window.title("Ninja Sage Bot - Logs & Terminal Output")
+        self.window.geometry("800x500")
+        self.window.minsize(600, 400)
+        
+        # Create menu
+        menubar = tk.Menu(self.window)
+        self.window.config(menu=menubar)
+        
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Clear Logs", command=self.clear_logs)
+        file_menu.add_separator()
+        file_menu.add_command(label="Close", command=self.hide)
+        
+        # Create main frame
+        main_frame = ttk.Frame(self.window)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Create toolbar
+        toolbar = ttk.Frame(main_frame)
+        toolbar.pack(fill=tk.X, pady=(0, 5))
+        
+        clear_btn = ttk.Button(toolbar, text="Clear Logs", command=self.clear_logs)
+        clear_btn.pack(side=tk.LEFT, padx=2)
+        
+        copy_btn = ttk.Button(toolbar, text="Copy", command=self.copy_text)
+        copy_btn.pack(side=tk.LEFT, padx=2)
+        
+        auto_scroll_var = tk.BooleanVar(value=True)
+        auto_scroll_cb = ttk.Checkbutton(toolbar, text="Auto Scroll", 
+                                       variable=auto_scroll_var)
+        auto_scroll_cb.pack(side=tk.RIGHT, padx=2)
+        
+        # Create text widget with scrollbar
+        text_frame = ttk.Frame(main_frame)
+        text_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Vertical scrollbar
+        v_scrollbar = ttk.Scrollbar(text_frame)
+        v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Horizontal scrollbar
+        h_scrollbar = ttk.Scrollbar(text_frame, orient=tk.HORIZONTAL)
+        h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
+        
+        # Text widget
+        self.text_widget = tk.Text(
+            text_frame,
+            wrap=tk.WORD,
+            yscrollcommand=v_scrollbar.set,
+            xscrollcommand=h_scrollbar.set,
+            font=('Consolas', 10),
+            bg='#1e1e1e',
+            fg='#d4d4d4',
+            insertbackground='white',
+            selectbackground='#264f78'
+        )
+        self.text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # Configure scrollbars
+        v_scrollbar.config(command=self.text_widget.yview)
+        h_scrollbar.config(command=self.text_widget.xview)
+        
+        # Configure tags for different log types
+        self.text_widget.tag_configure('stdout', foreground='#d4d4d4')
+        self.text_widget.tag_configure('stderr', foreground='#f44747')
+        self.text_widget.tag_configure('success', foreground='#4ec9b0')
+        self.text_widget.tag_configure('warning', foreground='#ffcc02')
+        self.text_widget.tag_configure('info', foreground='#9cdcfe')
+        self.text_widget.tag_configure('timestamp', foreground='#6a9955')
+        
+        # Redirect stdout and stderr
+        sys.stdout = TextRedirector(self.text_widget, 'stdout')
+        sys.stderr = TextRedirector(self.text_widget, 'stderr')
+        
+        # Add welcome message
+        self.add_timestamped_message("Log window started. All terminal output will be shown here.", 'info')
+        
+        # Bind window close event
+        self.window.protocol("WM_DELETE_WINDOW", self.hide)
+        
+        # Auto-scroll functionality
+        def auto_scroll():
+            if auto_scroll_var.get() and self.text_widget:
+                self.text_widget.see(tk.END)
+            if self.window and self.window.winfo_exists():
+                self.window.after(100, auto_scroll)
+            
+        auto_scroll()
+        
+    def hide(self):
+        """Hide the log window without destroying it"""
+        if self.window:
+            # Restore original stdout/stderr when hiding
+            sys.stdout = self.original_stdout
+            sys.stderr = self.original_stderr
+            self.window.withdraw()
+            
+    def clear_logs(self):
+        """Clear all log text"""
+        if self.text_widget:
+            self.text_widget.delete(1.0, tk.END)
+            self.add_timestamped_message("Logs cleared.", 'info')
+            
+    def copy_text(self):
+        """Copy selected text to clipboard"""
+        if self.text_widget:
+            try:
+                selected_text = self.text_widget.get(tk.SEL_FIRST, tk.SEL_LAST)
+                self.window.clipboard_clear()
+                self.window.clipboard_append(selected_text)
+            except tk.TclError:
+                # No text selected
+                pass
+                
+    def add_timestamped_message(self, message, tag='stdout'):
+        """Add a message with timestamp"""
+        if self.text_widget:
+            timestamp = time.strftime("%H:%M:%S")
+            self.text_widget.insert(tk.END, f"[{timestamp}] ", 'timestamp')
+            self.text_widget.insert(tk.END, f"{message}\n", tag)
+            self.text_widget.see(tk.END)
+            
+    def is_visible(self):
+        """Check if log window is visible"""
+        return self.window and self.window.winfo_exists()
+
+
+class NinjaSageGUI:
     def __init__(self):
+        self.root = tk.Tk()
+        self.root.title("Ninja Sage Bot by robot0011")
+        self.root.geometry("700x600")
+        self.root.resizable(True, True)
+        config.main_window = self.root
+        # Configure style
+        self.style = ttk.Style()
+        self.style.configure('TFrame', background='#f0f0f0')
+        self.style.configure('TLabel', background='#f0f0f0', font=('Arial', 10))
+        self.style.configure('Title.TLabel', background='#f0f0f0', font=('Arial', 16, 'bold'))
+        self.style.configure('TButton', font=('Arial', 10))
+        self.style.configure('Action.TButton', font=('Arial', 9), width=20)
+        self.style.configure('Big.TButton', font=('Arial', 12))
+        
         self.QUICK_LOGIN_FILE = 'quick_login.json'
         self.running = True
+        self.current_character = None
+        self.action_thread = None
+        self.stop_event = threading.Event()
+        self.current_action = None
+        
+        # Create log window
+        self.log_window = LogWindow(self.root)
+        
+        # Create main container
+        self.main_frame = ttk.Frame(self.root)
+        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        self.current_frame = None
+        self.show_welcome_screen()
+    
+    def show_log_window(self):
+        """Force show the log window"""
+        self.log_window.show()
+
+    def clear_frame(self):
+        """Clear all widgets from current frame"""
+        if self.current_frame:
+            self.current_frame.destroy()
+        self.current_frame = ttk.Frame(self.main_frame)
+        self.current_frame.pack(fill=tk.BOTH, expand=True)
+    
+    def show_welcome_screen(self):
+        """Display welcome screen"""
+        self.clear_frame()
+        
+        title_label = ttk.Label(self.current_frame, text="Ninja Sage Bot by robot0011", 
+                               style='Title.TLabel', foreground='#2c3e50')
+        title_label.pack(pady=30)
+        
+        version_label = ttk.Label(self.current_frame, text="Checking game version...", 
+                                 font=('Arial', 12))
+        version_label.pack(pady=10)
+        
+        # Add show logs button
+        logs_btn = ttk.Button(self.current_frame, text="📋 Show Logs Window", 
+                            command=self.show_log_window)
+        logs_btn.pack(pady=10)
+        
+        self.root.update()
+        
+        # Check version in a thread to avoid freezing GUI
+        def check_version():
+            success = self.check_game_version()
+            self.root.after(0, lambda: self.on_version_checked(success, version_label))
+        
+        threading.Thread(target=check_version, daemon=True).start()
+    
+    def on_version_checked(self, success, version_label):
+        """Handle version check result"""
+        if success:
+            version_label.config(text="✅ Game version: Compatible", foreground='green')
+            self.root.after(1000, self.show_login_screen)
+        else:
+            version_label.config(text="❌ Game version not compatible!", foreground='red')
+            retry_btn = ttk.Button(self.current_frame, text="Retry", command=self.show_welcome_screen)
+            retry_btn.pack(pady=10)
     
     def check_game_version(self) -> bool:
         """Check if game version is compatible"""
         config.game_data = amf_req.check_version()
-        if config.game_data.get("status") != 1:
-            print("Game version not matched, wait for the panel update")
-            return False
-        return True
+        return config.game_data.get("status") == 1
     
-    def display_welcome(self):
-        """Display welcome message"""
-        print("==== Panel Ninja Sage by robot0011 ===")
-        print("")
+    def show_login_screen(self):
+        """Display login screen"""
+        self.clear_frame()
+        
+        # Bigger login title
+        title_label = tk.Label(self.current_frame, text="LOGIN", 
+                              font=('Arial', 28, 'bold'), foreground='#2c3e50', bg='#f0f0f0')
+        title_label.pack(pady=40)
+        
+        login_frame = ttk.Frame(self.current_frame)
+        login_frame.pack(pady=20)
+        
+        # Quick login button if available
+        if self.quick_login_exists():
+            quick_login_btn = ttk.Button(login_frame, text="Quick Login", 
+                                       command=self.quick_login, width=20, style='Big.TButton')
+            quick_login_btn.pack(pady=15)
+            
+            tk.Label(login_frame, text="OR", font=('Arial', 14), bg='#f0f0f0').pack(pady=15)
+        
+        # Manual login form
+        form_frame = ttk.Frame(login_frame)
+        form_frame.pack(pady=20)
+        
+        # Username field
+        tk.Label(form_frame, text="Username:", font=('Arial', 14), bg='#f0f0f0').grid(row=0, column=0, padx=10, pady=12, sticky=tk.W)
+        self.username_entry = ttk.Entry(form_frame, width=25, font=('Arial', 12))
+        self.username_entry.grid(row=0, column=1, padx=10, pady=12)
+        
+        # Password field
+        tk.Label(form_frame, text="Password:", font=('Arial', 14), bg='#f0f0f0').grid(row=1, column=0, padx=10, pady=12, sticky=tk.W)
+        self.password_entry = ttk.Entry(form_frame, width=25, show="*", font=('Arial', 12))
+        self.password_entry.grid(row=1, column=1, padx=10, pady=12)
+        
+        # Show password checkbox
+        self.show_password_var = tk.BooleanVar()
+        show_password_cb = tk.Checkbutton(form_frame, text="Show Password", 
+                                         variable=self.show_password_var,
+                                         command=self.toggle_password_visibility,
+                                         font=('Arial', 11), bg='#f0f0f0')
+        show_password_cb.grid(row=2, column=1, padx=10, pady=8, sticky=tk.W)
+        
+        def perform_login():
+            username = self.username_entry.get().strip()
+            password = self.password_entry.get().strip()
+            if username and password:
+                self.manual_login(username, password)
+            else:
+                messagebox.showwarning("Input Error", "Please enter both username and password")
+        
+        login_btn = ttk.Button(form_frame, text="Login", command=perform_login, width=15, style='Big.TButton')
+        login_btn.grid(row=3, column=0, columnspan=2, pady=20)
+        
+        # Show logs button
+        logs_btn = ttk.Button(form_frame, text="📋 Show Logs Window", 
+                            command=self.show_log_window)
+        logs_btn.grid(row=4, column=0, columnspan=2, pady=10)
+        
+        # Bind Enter key to login
+        self.password_entry.bind('<Return>', lambda e: perform_login())
+        self.username_entry.focus()
+    
+    def toggle_password_visibility(self):
+        """Toggle password visibility"""
+        if self.show_password_var.get():
+            self.password_entry.config(show="")
+        else:
+            self.password_entry.config(show="*")
     
     def quick_login_exists(self) -> bool:
         """Check if quick login data exists"""
@@ -45,181 +347,404 @@ class NinjaSageApp:
         except (FileNotFoundError, json.JSONDecodeError):
             return None
     
+    def quick_login(self):
+        """Perform quick login"""
+        login_data = self.load_quick_login()
+        if login_data:
+            self.perform_login(login_data["username"], login_data["password"])
+        else:
+            messagebox.showerror("Quick Login Failed", "No quick login data found")
+    
+    def manual_login(self, username: str, password: str):
+        """Perform manual login"""
+        self.perform_login(username, password)
+    
+    def perform_login(self, username: str, password: str):
+        """Perform login in a separate thread"""
+        def login_thread():
+            config.login_data = amf_req.login(
+                username, 
+                password, 
+                config.game_data["__"], 
+                str(int(config.game_data["_"]))
+            )
+            
+            self.root.after(0, lambda: self.on_login_result(config.login_data.get('status') == 1, username, password))
+        
+        self.show_loading("Logging in...")
+        threading.Thread(target=login_thread, daemon=True).start()
+    
+    def on_login_result(self, success: bool, username: str, password: str):
+        """Handle login result"""
+        self.hide_loading()
+        
+        if success:
+            self.save_quick_login(username, password)
+            self.show_character_selection()
+        else:
+            messagebox.showerror("Login Failed", "Invalid username or password")
+    
     def save_quick_login(self, username: str, password: str):
         """Save login credentials for quick login"""
         login_data = {"username": username, "password": password}
         save_to_json(login_data, "quick_login")
     
-    def perform_login(self, username: str, password: str) -> bool:
-        """Perform login and validate credentials"""
-        config.login_data = amf_req.login(
-            username, 
-            password, 
-            config.game_data["__"], 
-            str(int(config.game_data["_"]))
-        )
-        return config.login_data.get('status') == 1
-    
-    def handle_login(self) -> bool:
-        """Handle the login process"""
-        print("Login Page")
-        print("1: Quick login")
-        print("2: Login")
+    def show_character_selection(self):
+        """Show character selection screen"""
+        self.clear_frame()
         
-        while True:
-            try:
-                login_method = int(input("Enter your login method: "))
-            except ValueError:
-                print("Please enter a valid number (1 or 2)")
-                continue
-            
-            if login_method == 1:
-                login_data = self.load_quick_login()
-                if login_data:
-                    username = login_data["username"]
-                    password = login_data["password"]
-                    if self.perform_login(username, password):
-                        return True
-                    else:
-                        print("Quick login failed. Please try manual login.")
-                else:
-                    print("No quick login data found. Please use login method 2 to login first.")
-            
-            elif login_method == 2:
-                username = input("Enter your username: ")
-                password = input("Enter your password: ")
-                
-                if self.perform_login(username, password):
-                    self.save_quick_login(username, password)
-                    return True
-                else:
-                    print("Invalid username or password. Please try again.")
-            else:
-                print("Invalid choice. Please enter 1 or 2.")
+        title_label = ttk.Label(self.current_frame, text="Select Character", 
+                               style='Title.TLabel', foreground='#2c3e50')
+        title_label.pack(pady=20)
+        
+        # Create a frame for the listbox with scrollbar
+        list_frame = ttk.Frame(self.current_frame)
+        list_frame.pack(pady=10, padx=20, fill=tk.BOTH, expand=True)
+        
+        # Add scrollbar to listbox
+        scrollbar = ttk.Scrollbar(list_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.char_listbox = tk.Listbox(list_frame, width=60, height=12, 
+                                      font=('Arial', 11),
+                                      yscrollcommand=scrollbar.set)
+        self.char_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=self.char_listbox.yview)
+        
+        # Bind double-click to select character
+        self.char_listbox.bind('<Double-Button-1>', lambda e: self.select_character())
+        
+        button_frame = ttk.Frame(self.current_frame)
+        button_frame.pack(pady=15)
+        
+        refresh_btn = ttk.Button(button_frame, text="Refresh Characters", 
+                               command=self.load_characters)
+        refresh_btn.pack(side=tk.LEFT, padx=10)
+        
+        select_btn = ttk.Button(button_frame, text="Select Character", 
+                              command=self.select_character)
+        select_btn.pack(side=tk.LEFT, padx=10)
+        
+        logs_btn = ttk.Button(button_frame, text="📋 Show Logs", 
+                            command=self.show_log_window)
+        logs_btn.pack(side=tk.LEFT, padx=10)
+        
+        self.load_characters()
     
-    def select_character(self):
-        """Handle character selection"""
-        print("")
-        print("List of your characters:")
-        all_char = amf_req.get_all_characters()
+    def load_characters(self):
+        """Load characters in a separate thread"""
+        def load_thread():
+            all_char = amf_req.get_all_characters()
+            self.root.after(0, lambda: self.on_characters_loaded(all_char))
+        
+        self.show_loading("Loading characters...")
+        threading.Thread(target=load_thread, daemon=True).start()
+    
+    def on_characters_loaded(self, all_char):
+        """Handle characters loaded"""
+        self.hide_loading()
+        
+        self.char_listbox.delete(0, tk.END)
+        self.all_characters = all_char
         
         if not all_char:
-            print("No characters found!")
-            return False
-        
-        
-        while True:
-            try:
-                chosen_character = int(input("Choose your character: "))
-                if 1 <= chosen_character <= len(all_char):
-                    break
-                else:
-                    print(f"Please enter a number between 1 and {len(all_char)}")
-            except ValueError:
-                print("Please enter a valid number")
-        
-        # Get the selected character data
-        selected_char = all_char[chosen_character-1]
-        config.char_data = amf_req.get_character_data(selected_char)
-        
-        if not config.char_data:
-            print("Failed to load character data!")
-            return False
-            
-        self.display_character_info()
-        return True
-    
-    def display_character_info(self):
-        """Display current character information"""
-        if not config.char_data or "character_data" not in config.char_data:
-            print("No character data available!")
+            self.char_listbox.insert(tk.END, "No characters found!")
             return
+        
+        # Handle both list of integers and list of dictionaries
+        for i, char in enumerate(config.all_char['account_data'], 1):
+            if isinstance(char, dict):
+                # It's a dictionary with character data
+                char_name = char.get('character_name', f'Character {i}')
+                char_level = char.get('character_level')
+                self.char_listbox.insert(tk.END, f"{i}. {char_name} || Level: {char_level}")
+            else:
+                # It's probably a character ID or other identifier
+                self.char_listbox.insert(tk.END, f"{i}. Char Name: Character || Level: {char}")
+    
+    def select_character(self):
+        """Select character from list"""
+        selection = self.char_listbox.curselection()
+        if not selection:
+            messagebox.showwarning("Selection Error", "Please select a character")
+            return
+        
+        char_index = selection[0]
+        if not self.all_characters or char_index >= len(self.all_characters):
+            messagebox.showerror("Error", "Invalid character selection")
+            return
+        
+        def load_thread():
+            selected_char = self.all_characters[char_index]
             
-        char_data = config.char_data["character_data"]
-        print("")
-        print("Ninja Character Data:")
-        print(f"Name: {char_data.get('character_name', 'Unknown')} || "
-              f"Exp: {char_data.get('character_xp', 0)} || "
-              f"Gold: {char_data.get('character_gold', 0)} || "
-              f"Token: {config.all_char['tokens']}")
-        print("")
+            # Handle both dictionary and integer character references
+            if isinstance(selected_char, dict):
+                # If it's already a dictionary, use it directly
+                config.char_data = amf_req.get_character_data(selected_char)
+            else:
+                # If it's an integer/ID, we need to pass the appropriate data structure
+                config.char_data = amf_req.get_character_data(selected_char)
+            
+            success = config.char_data is not None and "character_data" in config.char_data
+            self.root.after(0, lambda: self.on_character_loaded(success))
+        
+        self.show_loading("Loading character data...")
+        threading.Thread(target=load_thread, daemon=True).start()
+    
+    def on_character_loaded(self, success: bool):
+        """Handle character loaded"""
+        self.hide_loading()
+        
+        if success:
+            self.current_character = config.char_data["character_data"]
+            self.show_main_menu()
+        else:
+            messagebox.showerror("Error", "Failed to load character data")
     
     def show_main_menu(self):
-        """Display the main menu options"""
-        print("What do you want to do?")
-        print("")
-        print("1. Start Leveling")
-        print("2. Fight Eudemon Boss")
-        print("3. Fight CD Event Boss")
-        print("4. Fight Pumpkin Event Boss")
-        print("5. Fight Yin Yang Event Boss")
-        print("6. Fight Independence Event Boss")
-        print("7. Shadow War")
-        print("8. Event Finisher")
-        print("9. See character details")
-        print("0. Exit")
-
-    def handle_user_action(self, action: int):
-        """Handle user menu selection"""
-        action_handlers = {
-            1: (start_leveling, "Starting Leveling... press q to stop levelling"),
-            2: (fight_eudemon_boss, "Starting Eudemon Boss Fight... press q to stop fighting"),
-            3: (fight_cd_event, "Starting CD Event Boss Fight... press q to stop fighting"),
-            4: (fight_pumpkin_event, "Starting Pumpkin Event Fight... press q to stop fighting"),
-            5: (fight_yinyang_event, "Starting Yin Yang event Fight... press q to stop fighting"),
-            6: (fight_gi_event, "Starting Independence event Fight... press q to stop fighting"),
-            7: (shadow_war_event, "Starting Shadow War Event... press q to stop fighting"),
-            8: (event_finisher, "Starting Event Finisher... press q to stop fighting"),
-            9: (self.display_character_info, ""),
-            0: (self.exit_app, "Exiting...")
-        }
+        """Show main menu with actions"""
+        self.clear_frame()
         
-        if action in action_handlers:
-            handler, message = action_handlers[action]
-            
-            if message:
-                print("")
-                print(message)
-            
-            handler()
-        else:
-            print("Invalid choice. Please try again.")
+        # Character info at top
+        char_info_frame = tk.LabelFrame(self.current_frame, text="Character Information", 
+                                       font=('Arial', 12, 'bold'), bg='#f0f0f0', fg='#2c3e50')
+        char_info_frame.pack(fill=tk.X, padx=15, pady=15)
         
-        print("\n")
+        if self.current_character:
+            char_name = self.current_character.get('character_name', 'Unknown')
+            char_xp = self.current_character.get('character_xp', 0)
+            char_gold = self.current_character.get('character_gold', 0)
+            tokens = config.all_char.get('tokens', 0) if hasattr(config, 'all_char') else 0
+            
+            info_text = f"👤 Name: {char_name} | ⭐ Exp: {char_xp} | 💰 Gold: {char_gold} | 🪙 Token: {tokens}"
+            info_label = tk.Label(char_info_frame, text=info_text, font=('Arial', 11), bg='#f0f0f0')
+            info_label.pack(pady=10)
+        
+        # Actions frame
+        actions_frame = tk.LabelFrame(self.current_frame, text="Available Actions", 
+                                     font=('Arial', 12, 'bold'), bg='#f0f0f0', fg='#2c3e50')
+        actions_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+        
+        # Create action buttons
+        actions = [
+    ("🚀 Start Leveling", start_leveling),
+    ("👹 Fight Eudemon Boss", fight_eudemon_boss),
+    ("⚡ Fight CD Event Boss", fight_cd_event),
+    ("🎃 Fight Pumpkin Event Boss", fight_pumpkin_event),
+    ("☯️ Fight Yin Yang Event Boss", fight_yinyang_event),
+    ("🎆 Fight Independence Event Boss", fight_gi_event),
+    ("⚔️ Shadow War", shadow_war_event),
+    ("🏁 Event Finisher", event_finisher),  # This now opens the config popup
+    ("🔄 Refresh Character Info", self.refresh_character_info)
+]
+        # Arrange buttons in a grid
+        for i, (text, action) in enumerate(actions):
+            row = i // 3
+            col = i % 3
+            btn = ttk.Button(actions_frame, text=text, 
+                           command=lambda a=action, t=text: self.start_action(a, t),
+                           style='Action.TButton')
+            btn.grid(row=row, column=col, padx=8, pady=8, sticky=tk.NSEW)
+        
+        # Configure grid weights
+        for i in range(3):
+            actions_frame.columnconfigure(i, weight=1)
+        for i in range((len(actions) + 2) // 3):
+            actions_frame.rowconfigure(i, weight=1)
+        
+        # Control frame with stop button and status
+        control_frame = tk.LabelFrame(self.current_frame, text="Controls", 
+                                     font=('Arial', 12, 'bold'), bg='#f0f0f0', fg='#2c3e50')
+        control_frame.pack(fill=tk.X, padx=15, pady=15)
+        
+        # Stop button and status in control frame
+        stop_status_frame = ttk.Frame(control_frame)
+        stop_status_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        self.stop_btn = ttk.Button(stop_status_frame, text="🛑 Stop Current Action", 
+                                 command=self.stop_action, state=tk.DISABLED,
+                                 style='Action.TButton')
+        self.stop_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Logs button
+        logs_btn = ttk.Button(stop_status_frame, text="📋 Show Logs Window", 
+                            command=self.show_log_window)
+        logs_btn.pack(side=tk.LEFT, padx=5)
+        
+        self.status_label = tk.Label(stop_status_frame, text="✅ Ready", 
+                                    font=('Arial', 11), foreground='green', bg='#f0f0f0')
+        self.status_label.pack(side=tk.RIGHT, padx=5)
+        
+        # Exit button
+        exit_btn = ttk.Button(control_frame, text="🚪 Exit", 
+                            command=self.root.quit, style='Action.TButton')
+        exit_btn.pack(pady=5)
     
-    def exit_app(self):
-        """Exit the application"""
-        self.running = False
+    def refresh_character_info(self):
+        """Refresh character information"""
+        def refresh_thread():
+            try:
+                # Get fresh character list
+                all_char = amf_req.get_all_characters()
+                if not all_char:
+                    print("No characters found during refresh")
+                    self.root.after(0, lambda: self.status_label.config(text="❌ No characters found", foreground='red'))
+                    return
+                    
+                if self.current_character:
+                    current_name = self.current_character.get('character_name')
+                    print(f"Refreshing data for character: {current_name}")
+                    
+                    # Find the current character in the fresh list
+                    character_found = False
+                    for char in all_char:
+                        if isinstance(char, dict) and char.get('character_name') == current_name:
+                            # Found our character, get fresh data
+                            config.char_data = amf_req.get_character_data(char)
+                            if config.char_data and "character_data" in config.char_data:
+                                self.current_character = config.char_data["character_data"]
+                                character_found = True
+                                print("Character data refreshed successfully")
+                            break
+                        elif not isinstance(char, dict):
+                            # Handle integer character IDs
+                            config.char_data = amf_req.get_character_data(char)
+                            new_char_data = config.char_data.get("character_data", {})
+                            if new_char_data.get('character_name') == current_name:
+                                self.current_character = new_char_data
+                                character_found = True
+                                print("Character data refreshed successfully")
+                                break
+                    
+                    if not character_found:
+                        print("Current character not found in character list")
+                        self.root.after(0, lambda: self.status_label.config(text="❌ Character not found", foreground='red'))
+                        return
+                
+                # Update the main menu with fresh data
+                self.root.after(0, self.show_main_menu)
+                self.root.after(0, lambda: self.status_label.config(text="✅ Character info refreshed", foreground='green'))
+                
+            except Exception as e:
+                print(f"Error refreshing character info: {e}")
+                self.root.after(0, lambda: self.status_label.config(text=f"❌ Refresh failed: {e}", foreground='red'))
+                self.root.after(0, lambda: messagebox.showerror("Refresh Error", f"Failed to refresh character info: {e}"))
+        
+        self.status_label.config(text="🔄 Refreshing character info...", foreground='blue')
+        threading.Thread(target=refresh_thread, daemon=True).start()
+    
+    def start_action(self, action_func, action_name):
+        """Start an action in separate thread"""
+        if self.action_thread and self.action_thread.is_alive():
+            messagebox.showwarning("Action Running", "Please stop the current action first")
+            return
+        
+        # Auto-show log window when starting an action
+        self.show_log_window()
+        
+        self.stop_event.clear()
+        self.stop_btn.config(state=tk.NORMAL)
+        self.current_action = action_name
+        self.status_label.config(text=f"🟡 Running: {action_name}...", foreground='orange')
+        
+        # Set the stop event in config so action functions can check it
+        config.stop_event = self.stop_event
+        
+        def action_wrapper():
+            try:
+                action_func()
+            except Exception as e:
+                self.root.after(0, lambda: self.on_action_error(str(e)))
+            finally:
+                self.root.after(0, self.on_action_finished)
+        
+        self.action_thread = threading.Thread(target=action_wrapper, daemon=True)
+        self.action_thread.start()
+    
+    def stop_action(self):
+        """Stop current action"""
+        if self.action_thread and self.action_thread.is_alive():
+            self.stop_event.set()
+            self.status_label.config(text="🟠 Stopping action... Please wait", foreground='orange')
+            # Force stop after 3 seconds if not responding
+            self.root.after(3000, self.force_stop_action)
+        else:
+            self.status_label.config(text="✅ No action running", foreground='green')
+    
+    def force_stop_action(self):
+        """Force stop action if normal stop doesn't work"""
+        if self.action_thread and self.action_thread.is_alive():
+            self.status_label.config(text="🔴 Action stopped", foreground='red')
+            self.stop_btn.config(state=tk.DISABLED)
+            self.current_action = None
+    
+    def on_action_finished(self):
+        """Handle action finished"""
+        self.stop_btn.config(state=tk.DISABLED)
+        self.status_label.config(text="✅ Action completed", foreground='green')
+        self.current_action = None
+        # Auto-refresh character info after action
+        self.refresh_character_info()
+    
+    def on_action_error(self, error_msg):
+        """Handle action error"""
+        self.stop_btn.config(state=tk.DISABLED)
+        self.status_label.config(text=f"❌ Error: {error_msg}", foreground='red')
+        self.current_action = None
+        messagebox.showerror("Action Error", f"An error occurred:\n{error_msg}")
+    
+    def show_loading(self, message="Loading..."):
+        """Show loading indicator"""
+        if hasattr(self, 'loading_frame') and self.loading_frame:
+            self.loading_frame.destroy()
+        
+        self.loading_frame = tk.Toplevel(self.root)
+        self.loading_frame.title("Please Wait")
+        self.loading_frame.geometry("350x120")
+        self.loading_frame.transient(self.root)
+        self.loading_frame.grab_set()
+        self.loading_frame.configure(bg='white')
+        
+        # Center the loading window
+        self.loading_frame.update_idletasks()
+        x = self.root.winfo_x() + (self.root.winfo_width() // 2) - (350 // 2)
+        y = self.root.winfo_y() + (self.root.winfo_height() // 2) - (120 // 2)
+        self.loading_frame.geometry(f"+{x}+{y}")
+        
+        # Loading message
+        label = tk.Label(self.loading_frame, text=message, font=('Arial', 12), bg='white')
+        label.pack(expand=True, pady=10)
+        
+        # Progress bar
+        progress = ttk.Progressbar(self.loading_frame, mode='indeterminate', length=300)
+        progress.pack(fill=tk.X, padx=25, pady=10)
+        progress.start()
+        
+        # Make sure it appears on top
+        self.loading_frame.lift()
+        self.loading_frame.focus_force()
+    
+    def hide_loading(self):
+        """Hide loading indicator"""
+        if hasattr(self, 'loading_frame') and self.loading_frame:
+            self.loading_frame.destroy()
+            self.loading_frame = None
     
     def run(self):
-        """Main application loop"""
-        if not self.check_game_version():
-            return
-        
-        self.display_welcome()
-        
-        if not self.handle_login():
-            return
-        
-        if not self.select_character():
-            return
-        
-        while self.running:
-            self.show_main_menu()
-            
-            try:
-                action = int(input("Enter your choice: "))
-                self.handle_user_action(action)
-            except ValueError:
-                print("Please enter a valid number")
-                print("\n")
-            except KeyboardInterrupt:
-                print("\n\nApplication interrupted by user. Exiting...")
-                self.exit_app()
+        """Start the GUI application"""
+        try:
+            self.root.mainloop()
+        except KeyboardInterrupt:
+            self.root.quit()
+        finally:
+            # Restore original stdout/stderr when closing
+            if hasattr(self, 'log_window') and hasattr(self.log_window, 'original_stdout'):
+                sys.stdout = self.log_window.original_stdout
+                sys.stderr = self.log_window.original_stderr
 
 
 def main():
-    app = NinjaSageApp()
+    app = NinjaSageGUI()
     app.run()
 
 

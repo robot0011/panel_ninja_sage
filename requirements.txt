@@ -1,0 +1,4 @@
+keyboard
+requests
+pycryptodome
+py3amf

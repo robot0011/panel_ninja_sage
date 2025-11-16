@@ -12,6 +12,13 @@ battle_hash = "eyJpdGVtcyI6eyJhY2Nlc3NvcnkiOiJhY2Nlc3NvcnlfMDEiLCJiYWNrX2l0ZW0iO
 relogin_attempts = 0
 MAX_RELOGIN_ATTEMPTS = 3
 
+def check_stop_event():
+    """Check if stop event is set from GUI"""
+    if hasattr(config, 'stop_event') and config.stop_event.is_set():
+        print("Leveling stopped by user request")
+        return True
+    return False
+
 def automatic_relogin():
     """Fungsi untuk melakukan login ulang otomatis ketika session expired"""
     global relogin_attempts
@@ -19,6 +26,10 @@ def automatic_relogin():
     print("Attempting automatic relogin...")
     
     try:
+        # Check stop event before proceeding
+        if check_stop_event():
+            return False
+            
         # Load quick login data
         quick_login_data = open_json_to_dict("quick_login.json")
         if not quick_login_data:
@@ -37,6 +48,10 @@ def automatic_relogin():
             print("Game version check failed during auto relogin.")
             return False
         
+        # Check stop event before login
+        if check_stop_event():
+            return False
+            
         # Perform login
         config.login_data = amf_req.login(
             username, 
@@ -50,6 +65,10 @@ def automatic_relogin():
             relogin_attempts += 1
             return False
         
+        # Check stop event before getting character data
+        if check_stop_event():
+            return False
+            
         # Get the same character data again
         if config.char_data and "character_data" in config.char_data:
             char_id = config.char_data["character_data"]["character_id"]
@@ -70,6 +89,10 @@ def automatic_relogin():
         return False
 
 def get_levelling_mission(char_level):
+    """Get appropriate mission for character level"""
+    if check_stop_event():
+        return None
+        
     prohibited_grades = ["daily", "tp", "ss", ""]
     if char_level <= 60:
         levelling_mission = [m for m in mission_list if m['level'] == char_level and m['grade'] not in prohibited_grades]
@@ -78,6 +101,10 @@ def get_levelling_mission(char_level):
     return levelling_mission[0] if levelling_mission else None
 
 def build_enemy_attributes(mission_same_level):
+    """Build enemy attributes for battle"""
+    if check_stop_event():
+        return [], ""
+        
     enemies = []
     enemy_attrs = []
     for enemy in mission_same_level['enemies']:
@@ -87,6 +114,10 @@ def build_enemy_attributes(mission_same_level):
     return enemies, "#".join(enemy_attrs)
 
 def start_battle(mission_same_level, char_id, char_level, session_key):
+    """Start a battle mission"""
+    if check_stop_event():
+        return None
+        
     enemies, enemy_attrs = build_enemy_attributes(mission_same_level)
     agility = StatManager.calculate_stats_with_data("agility", flatten_json(config.char_data))
 
@@ -101,6 +132,10 @@ def start_battle(mission_same_level, char_id, char_level, session_key):
     return battle_id
 
 def finish_battle(mission_id, char_id, battle_id, session_key):
+    """Finish a battle mission"""
+    if check_stop_event():
+        return None
+        
     hash_input = f"{mission_id}{char_id}{battle_id}0"
     _loc2_ = CUCSG.hash(hash_input)
 
@@ -111,13 +146,27 @@ def finish_battle(mission_id, char_id, battle_id, session_key):
     return result
 
 def process_mission(mission_same_level, char_level, char_id, session_key):
+    """Process a single mission"""
     global relogin_attempts
     
+    # Check stop event at the beginning
+    if check_stop_event():
+        return char_level
+        
     mission_id = mission_same_level["id"]
     
     try:
         battle_id = start_battle(mission_same_level, char_id, char_level, session_key)
+        
+        # Check stop event after starting battle
+        if check_stop_event() or battle_id is None:
+            return char_level
+            
         result = finish_battle(mission_id, char_id, battle_id, session_key)
+
+        # Check stop event after finishing battle
+        if check_stop_event() or result is None:
+            return char_level
 
         if result["status"] == 1:
             print(f"Mission completed successfully! Gained Gold: {result['result'][0]} Gained EXP: {result['result'][1]} Current Level: {result['level']}")
@@ -125,7 +174,12 @@ def process_mission(mission_same_level, char_level, char_id, session_key):
             return result['level']
         else:
             print("Mission failed or session expired. Waiting 20 seconds...")
-            time.sleep(20)
+            
+            # Check stop event during wait
+            for i in range(20):
+                if check_stop_event():
+                    return char_level
+                time.sleep(1)
             
             # Auto relogin setelah failure
             if relogin_attempts < MAX_RELOGIN_ATTEMPTS:
@@ -145,7 +199,12 @@ def process_mission(mission_same_level, char_level, char_id, session_key):
     except Exception as e:
         print(f"Error during mission: {e}")
         print("Waiting 20 seconds and attempting auto relogin...")
-        time.sleep(20)
+        
+        # Check stop event during wait
+        for i in range(20):
+            if check_stop_event():
+                return char_level
+            time.sleep(1)
         
         if relogin_attempts < MAX_RELOGIN_ATTEMPTS:
             if automatic_relogin():
@@ -159,6 +218,7 @@ def process_mission(mission_same_level, char_level, char_id, session_key):
     return char_level
 
 def start_leveling(loop_times=None):
+    """Main leveling function with stop event support"""
     global relogin_attempts
     
     # Reset relogin attempts ketika mulai leveling baru
@@ -172,18 +232,26 @@ def start_leveling(loop_times=None):
     if loop_times is None:
         iter_count = 0
         while True:
+            # Check stop event at the start of each iteration
+            if check_stop_event():
+                break
+                
             if relogin_attempts >= MAX_RELOGIN_ATTEMPTS:
                 print("Too many auto relogin failures. Stopping leveling.")
                 break
                 
             if iter_count == 15 and iter_count != 0:
                 print("Rate limit reached. Waiting 30 seconds...")
-                time.sleep(30)
-                iter_count = 0
-
-            if keyboard.is_pressed('q'):
-                print("Stopping the levelling...")
-                break
+                
+                # Check stop event during wait
+                for i in range(30):
+                    if check_stop_event():
+                        break
+                    time.sleep(1)
+                else:
+                    iter_count = 0
+                    continue
+                break  # Break if stop event was set during wait
 
             mission_same_level = get_levelling_mission(char_level)
             if not mission_same_level:
@@ -204,17 +272,25 @@ def start_leveling(loop_times=None):
             iter_count += 1
     else:
         for i in range(loop_times):
+            # Check stop event at the start of each iteration
+            if check_stop_event():
+                break
+                
             if relogin_attempts >= MAX_RELOGIN_ATTEMPTS:
                 print("Too many auto relogin failures. Stopping leveling.")
                 break
                 
             if i % 15 == 0 and i != 0:
                 print("Rate limit reached. Waiting 30 seconds...")
-                time.sleep(30)
-
-            if keyboard.is_pressed('q'):
-                print("Stopping the levelling...")
-                break
+                
+                # Check stop event during wait
+                for i in range(30):
+                    if check_stop_event():
+                        break
+                    time.sleep(1)
+                else:
+                    continue
+                break  # Break if stop event was set during wait
 
             mission_same_level = get_levelling_mission(char_level)
             if not mission_same_level:
@@ -231,3 +307,9 @@ def start_leveling(loop_times=None):
             
             if new_level != char_level:
                 char_level = new_level
+    
+    # Clear the stop event when leveling finishes normally
+    if hasattr(config, 'stop_event'):
+        config.stop_event.clear()
+        
+    print("Leveling session ended")

@@ -17,7 +17,7 @@ def get_all_characters():
     # print(config.all_char)
     char_list = []
     for i in range(result["total_characters"]):
-        print(i+1,". Character ID: ",result["account_data"][i]["char_id"],"Character Name: ",result["account_data"][i]["character_name"],"Character Level: ",result["account_data"][i]["character_level"])
+        # print(i+1,". Character ID: ",result["account_data"][i]["char_id"],"Character Name: ",result["account_data"][i]["character_name"],"Character Level: ",result["account_data"][i]["character_level"])
         char_list.append(result["account_data"][i]["char_id"])
     return char_list
 

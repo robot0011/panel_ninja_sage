@@ -86,6 +86,14 @@ class EventBattleSystem:
         self.enemy_list = open_json_to_dict("data/enemy.json")
     
     @staticmethod
+    def _check_stop_event():
+        """Check if stop event is set from GUI"""
+        if hasattr(config, 'stop_event') and config.stop_event.is_set():
+            print("Event battle stopped by user request")
+            return True
+        return False
+    
+    @staticmethod
     def _get_character_data() -> Tuple[dict, str, str]:
         """Get character data and session info."""
         char_data = flatten_json(config.char_data)
@@ -130,6 +138,10 @@ class EventBattleSystem:
     def _execute_battle(self, char_data: dict, char_id: str, session_key: str,
                        enemy_id: str, enemy_data: dict, event_config: EventConfig) -> dict:
         """Execute a single battle."""
+        # Check stop event before starting battle
+        if self._check_stop_event():
+            return {"status": 0, "stopped": True}
+            
         agility = StatManager.calculate_stats_with_data("agility", char_data)
         enemy_attr = f"id:{enemy_id}|hp:{enemy_data['hp']}|agility:{enemy_data['agility']}"
         
@@ -140,8 +152,20 @@ class EventBattleSystem:
         
         battle_data = send_amf_request(event_config.get_start_battle_method(), parameters)
         
-        time.sleep(10)
+        # Check stop event during wait
+        if self._check_stop_event():
+            return {"status": 0, "stopped": True}
+            
+        # Wait with stop event checking
+        for i in range(10):
+            if self._check_stop_event():
+                return {"status": 0, "stopped": True}
+            time.sleep(1)
         
+        # Check stop event before finishing battle
+        if self._check_stop_event():
+            return {"status": 0, "stopped": True}
+            
         # Finish battle
         battle_dmg = 0
         mission_hash = self._create_battle_hash(char_id, enemy_id, battle_data['code'], battle_dmg)
@@ -152,8 +176,12 @@ class EventBattleSystem:
         save_fight_data(result)
         
         return result
-    def check_energy(self,event_type):
-
+    
+    def check_energy(self, event_type):
+        """Check available energy for event"""
+        if self._check_stop_event():
+            return 0
+            
         if event_type not in self.EVENT_CONFIGS:
             raise ValueError(f"Unknown event type: {event_type}. "
                            f"Available: {', '.join(self.EVENT_CONFIGS.keys())}")
@@ -173,6 +201,10 @@ class EventBattleSystem:
             enemy_id: Optional enemy ID to fight (if None, user will be prompted)
             num_loops: Number of battles to execute (if None, uses all available energy)
         """
+        # Check stop event at the beginning
+        if self._check_stop_event():
+            return
+            
         if event_type not in self.EVENT_CONFIGS:
             raise ValueError(f"Unknown event type: {event_type}. "
                            f"Available: {', '.join(self.EVENT_CONFIGS.keys())}")
@@ -228,12 +260,21 @@ class EventBattleSystem:
         # Execute battles
         successful_battles = 0
         for i in range(battles_to_execute):
+            # Check stop event at the start of each battle
+            if self._check_stop_event():
+                break
+                
             initial_tokens = config.all_char['tokens']
             print(f"\nStarting {event_config.name} Fight {i+1}/{battles_to_execute}")
             
             result = self._execute_battle(char_data, char_id, session_key, 
                                          enemy_id, enemy_data, event_config)
             
+            # Check if battle was stopped
+            if result.get('stopped'):
+                print("Battle stopped by user")
+                break
+                
             if result.get('status') == 1:
                 successful_battles += 1
                 print(f"✓ Successfully defeated {event_config.name} enemy | "
@@ -242,7 +283,11 @@ class EventBattleSystem:
             else:
                 print(f"✗ Battle failed with status: {result.get('status')}")
         
-        remaining_energy = available_energy - battles_to_execute
+        # Clear the stop event when finished normally
+        if hasattr(config, 'stop_event') and not config.stop_event.is_set():
+            config.stop_event.clear()
+            
+        remaining_energy = available_energy - successful_battles
         print(f"\n{'='*60}")
         print(f"Finished {event_config.name}:")
         print(f"  • Battles executed: {successful_battles}/{battles_to_execute}")
@@ -273,5 +318,3 @@ def fight_gi_event(enemy_id: Optional[str] = None, num_loops: Optional[int] = No
     """Fight Independence Event."""
     system = EventBattleSystem()
     system.fight_event("independence", enemy_id, num_loops)
-
-    "cd","pumpkin","yinyang","independence"
