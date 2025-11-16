@@ -8,27 +8,27 @@ def event_finisher():
     
     # Configure your targets here
     pumpkin_target = {
-        "ene_2104": 50,
-        "ene_2105": 25,
-        "ene_2106": 25,
-        "ene_2103": 50,
-        "ene_2102": 50
+        "ene_2104": 150,
+        "ene_2105": 50,
+        "ene_2106": 50,
+        "ene_2103": 200,
+        "ene_2102": 200
     }
     
     yinyang_target = {
-        "ene_2100": 100,  # Yin Tiger - 15 times
-        "ene_2101": 100   # Yang Dragon - 10 times
+        "ene_2100": 350,  # Yin Tiger - 15 times
+        "ene_2101": 350   # Yang Dragon - 10 times
     }
     
     independence_target = {
-        "ene_2095": 40,  # Lembuswana - 20 times
-        "ene_2096": 40,  # Lembuswana - 20 times
-        "ene_2098": 40,
-        "ene_2099": 40,
-        "ene_2097": 40   # Leak - 15 times
+        "ene_2095": 140,  # Lembuswana - 20 times
+        "ene_2096": 140,  # Lembuswana - 20 times
+        "ene_2098": 140,
+        "ene_2099": 140,
+        "ene_2097": 140   # Leak - 15 times
     }
     
-    cd_target = 200  # CD event - 30 times (only 1 enemy)
+    cd_target = 750  # CD event - 30 times (only 1 enemy)
     
     # Create working copies of targets (so we can track progress)
     pumpkin_remaining = pumpkin_target.copy()
@@ -152,6 +152,6 @@ def event_finisher():
             print("\nStarting leveling session (waiting for 160 minutes)...")
             shadow_war_event()
             # start_leveling(1920)
-            start_leveling(10)
+            start_leveling(20)
         else:
             print("\nAll targets completed! Skipping leveling.")
