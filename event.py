@@ -247,15 +247,15 @@ class EventBattleSystem:
                 'agility': event_config.boss_agility
             }
         else:
-            # Select enemy for regular events
-            if enemy_id is None:
-                enemy_id = self._prompt_enemy_selection(event_config, battle_data)
-            
+            # For regular events, enemy_id should be provided from GUI
             if not enemy_id:
-                print("Invalid enemy selection.")
+                print("No enemy selected. Please select an enemy from the GUI.")
                 return
             
             enemy_data = get_data_by_id(enemy_id, self.enemy_list)
+            if not enemy_data:
+                print(f"Invalid enemy ID: {enemy_id}")
+                return
         
         # Execute battles
         successful_battles = 0
@@ -315,6 +315,7 @@ def fight_yinyang_event(enemy_id: Optional[str] = None, num_loops: Optional[int]
 
 
 def fight_gi_event(enemy_id: Optional[str] = None, num_loops: Optional[int] = None):
+    print("Event Finished")
     """Fight Independence Event."""
-    system = EventBattleSystem()
-    system.fight_event("independence", enemy_id, num_loops)
+    # system = EventBattleSystem()
+    # system.fight_event("independence", enemy_id, num_loops)

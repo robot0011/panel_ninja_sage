@@ -9,28 +9,40 @@ def build_exe():
     if os.path.exists('dist'):
         shutil.rmtree('dist')
     
-    # PyInstaller configuration
     params = [
-        'main.py',  # Your main script
-        '--name=NinjaSageBot',
-        '--onefile',  # Single executable
-        '--windowed',  # No console window (use --console if you want console)
-        # '--icon=ninja_icon.ico',  # Optional: add an icon file
-        '--add-data=data;data',  # Include data folder
-        '--add-data=quick_login.json;.',  # Include config files
-        '--hidden-import=config',
-        '--hidden-import=amf_req',
-        '--hidden-import=leveling',
-        '--hidden-import=eudemon',
-        '--hidden-import=event',
-        '--hidden-import=event_finisher',
-        '--hidden-import=shadow_war',
-        '--hidden-import=resources',
-        '--hidden-import=utils',
-        '--collect-all=tkinter',
-        '--noconfirm',
-        '--clean'
-    ]
+    'main.py',  # Your main script
+    '--name=NinjaSageBot',
+    '--onefile',  # Single executable
+    '--console',  # Show console window (to view logs)
+    '--add-data=data;data',  # Include the 'data' folder
+    '--add-data=quick_login.json;.',  # Include specific config file
+    '--hidden-import=config',
+    '--hidden-import=amf_req',
+    '--hidden-import=leveling',
+    '--hidden-import=eudemon',
+    '--hidden-import=event',
+    '--hidden-import=event_finisher',
+    '--hidden-import=shadow_war',
+    '--hidden-import=resources',
+    '--hidden-import=utils',
+    '--hidden-import=tkinter',
+    '--hidden-import=keyboard',
+    '--hidden-import=requests',
+    '--hidden-import=pycryptodome',
+    '--hidden-import=py3amf',
+    '--hidden-import=pyamf',  # Add this line for pyamf module
+    '--hidden-import=pyamf.amf0',  # Add this line for pyamf.amf0 module
+    '--hidden-import=cpyamf',  # Add this line for cpyamf
+    '--collect-all=tkinter',
+    '--collect-all=keyboard',
+    '--collect-all=requests',
+    '--collect-all=pycryptodome',
+    '--collect-all=py3amf',
+    '--collect-all=pyamf',  # Ensure that pyamf is included in the bundle
+    '--noconfirm',
+    '--clean'
+]
+
     
     PyInstaller.__main__.run(params)
 

@@ -30,6 +30,13 @@ class EventFinisherConfigDialog:
         self.dialog.geometry(f"+{x}+{y}")
         
         self.create_widgets()
+        self.independence_targets = {
+            "ene_2104": 0,
+            "ene_2105": 0,
+            "ene_2106": 0,
+            "ene_2103": 0,
+            "ene_2102": 0
+        }
     
     def create_widgets(self):
         """Create the configuration form widgets"""
@@ -66,10 +73,10 @@ class EventFinisherConfigDialog:
         notebook.add(yinyang_frame, text="Yin Yang Event")
         self.create_yinyang_tab(yinyang_frame)
         
-        # Independence Event Tab
-        independence_frame = ttk.Frame(notebook, padding=10)
-        notebook.add(independence_frame, text="Independence Event")
-        self.create_independence_tab(independence_frame)
+        # # Independence Event Tab
+        # independence_frame = ttk.Frame(notebook, padding=10)
+        # notebook.add(independence_frame, text="Independence Event")
+        # self.create_independence_tab(independence_frame)
         
         # Buttons
         button_frame = ttk.Frame(main_frame)
@@ -95,7 +102,7 @@ class EventFinisherConfigDialog:
         cd_frame.pack(fill=tk.X, pady=5)
         
         tk.Label(cd_frame, text="CD Boss Kills:").pack(side=tk.LEFT)
-        self.cd_target = tk.IntVar(value=750)
+        self.cd_target = tk.IntVar(value=0)
         cd_spinbox = ttk.Spinbox(cd_frame, from_=0, to=10000, textvariable=self.cd_target, width=10)
         cd_spinbox.pack(side=tk.LEFT, padx=10)
     
@@ -119,8 +126,8 @@ class EventFinisherConfigDialog:
             frame.pack(fill=tk.X, pady=3)
             
             tk.Label(frame, text=f"{enemy_name} ({enemy_id}):", width=30, anchor=tk.W).pack(side=tk.LEFT)
-            var = tk.IntVar(value=150 if enemy_id == "ene_2104" else 
-                          50 if enemy_id in ["ene_2105", "ene_2106"] else 200)
+            var = tk.IntVar(value=0 if enemy_id == "ene_2104" else 
+                          0 if enemy_id in ["ene_2105", "ene_2106"] else 0)
             spinbox = ttk.Spinbox(frame, from_=0, to=10000, textvariable=var, width=10)
             spinbox.pack(side=tk.LEFT, padx=10)
             
@@ -142,7 +149,7 @@ class EventFinisherConfigDialog:
             frame.pack(fill=tk.X, pady=3)
             
             tk.Label(frame, text=f"{enemy_name} ({enemy_id}):", width=30, anchor=tk.W).pack(side=tk.LEFT)
-            var = tk.IntVar(value=350)
+            var = tk.IntVar(value=0)
             spinbox = ttk.Spinbox(frame, from_=0, to=10000, textvariable=var, width=10)
             spinbox.pack(side=tk.LEFT, padx=10)
             
@@ -182,8 +189,9 @@ class EventFinisherConfigDialog:
         # Validate that at least one target is set
         total_targets = (self.cd_target.get() + 
                         sum(var.get() for var in self.pumpkin_targets.values()) +
-                        sum(var.get() for var in self.yinyang_targets.values()) +
-                        sum(var.get() for var in self.independence_targets.values()))
+                        sum(var.get() for var in self.yinyang_targets.values())
+                        # sum(var.get() for var in self.independence_targets.values())
+                        )
         
         if total_targets == 0:
             messagebox.showwarning("No Targets", "Please set at least one target kill count.")
@@ -192,7 +200,7 @@ class EventFinisherConfigDialog:
         # Prepare the targets dictionary
         pumpkin_target = {enemy_id: var.get() for enemy_id, var in self.pumpkin_targets.items() if var.get() > 0}
         yinyang_target = {enemy_id: var.get() for enemy_id, var in self.yinyang_targets.items() if var.get() > 0}
-        independence_target = {enemy_id: var.get() for enemy_id, var in self.independence_targets.items() if var.get() > 0}
+        # independence_target = {enemy_id: var.get() for enemy_id, var in self.independence_targets.items() if var.get() > 0}
         cd_target = self.cd_target.get()
         
         # Close dialog
@@ -200,18 +208,18 @@ class EventFinisherConfigDialog:
         
         # Start event finisher in a separate thread
         threading.Thread(target=run_event_finisher, 
-                        args=(pumpkin_target, yinyang_target, independence_target, cd_target),
+                        args=(pumpkin_target, yinyang_target, cd_target),
                         daemon=True).start()
 
 
-def run_event_finisher(pumpkin_target, yinyang_target, independence_target, cd_target):
+def run_event_finisher(pumpkin_target, yinyang_target ,cd_target):
     """Run the event finisher with the given targets"""
     system = EventBattleSystem()
     
     # Create working copies of targets (so we can track progress)
     pumpkin_remaining = pumpkin_target.copy()
     yinyang_remaining = yinyang_target.copy()
-    independence_remaining = independence_target.copy()
+    # independence_remaining = independence_target.copy()
     cd_remaining = cd_target
     
     # Main event loop
@@ -229,15 +237,13 @@ def run_event_finisher(pumpkin_target, yinyang_target, independence_target, cd_t
         all_completed = (
             cd_remaining <= 0 and
             not pumpkin_remaining and 
-            not yinyang_remaining and 
-            not independence_remaining
+            not yinyang_remaining
+            # not independence_remaining
         )
         
         if all_completed:
             print("\n✓ All configured enemies have been defeated!")
             break
-        
-        battles_performed = False
         
         # CD Event
         if cd_remaining > 0:
@@ -251,7 +257,6 @@ def run_event_finisher(pumpkin_target, yinyang_target, independence_target, cd_t
                 print(f"Fighting CD boss ({cd_remaining} kills remaining)")
                 fight_cd_event(num_loops=1)
                 cd_remaining -= 1
-                battles_performed = True
                 if cd_remaining <= 0:
                     print("✓ CD event target completed!")
                     break
@@ -275,7 +280,6 @@ def run_event_finisher(pumpkin_target, yinyang_target, independence_target, cd_t
                 print(f"Fighting Pumpkin enemy {enemy_id} ({kills_left} kills remaining)")
                 fight_pumpkin_event(enemy_id=enemy_id, num_loops=1)
                 pumpkin_remaining[enemy_id] -= 1
-                battles_performed = True
                 if pumpkin_remaining[enemy_id] <= 0:
                     del pumpkin_remaining[enemy_id]
                     print(f"✓ Enemy {enemy_id} target completed!")
@@ -301,7 +305,6 @@ def run_event_finisher(pumpkin_target, yinyang_target, independence_target, cd_t
                 print(f"Fighting Yin-Yang enemy {enemy_id} ({kills_left} kills remaining)")
                 fight_yinyang_event(enemy_id=enemy_id, num_loops=1)
                 yinyang_remaining[enemy_id] -= 1
-                battles_performed = True
                 if yinyang_remaining[enemy_id] <= 0:
                     del yinyang_remaining[enemy_id]
                     print(f"✓ Enemy {enemy_id} target completed!")
@@ -314,50 +317,46 @@ def run_event_finisher(pumpkin_target, yinyang_target, independence_target, cd_t
                 print("⚠ No energy left for Yin-Yang event")
         
         # Independence Event
-        if independence_remaining:
-            energy = system.check_energy("independence")
-            print(f"\nIndependence Event Energy: {energy}")
-            while energy > 0 and independence_remaining:
-                # Check stop event
-                if hasattr(config, 'stop_event') and config.stop_event.is_set():
-                    break
+        # if independence_remaining:
+        #     energy = system.check_energy("independence")
+        #     print(f"\nIndependence Event Energy: {energy}")
+        #     while energy > 0 and independence_remaining:
+        #         # Check stop event
+        #         if hasattr(config, 'stop_event') and config.stop_event.is_set():
+        #             break
                     
-                enemy_id = next(iter(independence_remaining))
-                kills_left = independence_remaining[enemy_id]
-                print(f"Fighting Independence enemy {enemy_id} ({kills_left} kills remaining)")
-                fight_gi_event(enemy_id=enemy_id, num_loops=1)
-                independence_remaining[enemy_id] -= 1
-                battles_performed = True
-                if independence_remaining[enemy_id] <= 0:
-                    del independence_remaining[enemy_id]
-                    print(f"✓ Enemy {enemy_id} target completed!")
-                if not independence_remaining:
-                    print("✓ All Independence targets completed!")
-                    break
-                # Re-check energy for next iteration
-                energy = system.check_energy("independence")
-            if energy <= 0 and independence_remaining:
-                print("⚠ No energy left for Independence event")
+        #         enemy_id = next(iter(independence_remaining))
+        #         kills_left = independence_remaining[enemy_id]
+        #         print(f"Fighting Independence enemy {enemy_id} ({kills_left} kills remaining)")
+        #         fight_gi_event(enemy_id=enemy_id, num_loops=1)
+        #         independence_remaining[enemy_id] -= 1
+        #         if independence_remaining[enemy_id] <= 0:
+        #             del independence_remaining[enemy_id]
+        #             print(f"✓ Enemy {enemy_id} target completed!")
+        #         if not independence_remaining:
+        #             print("✓ All Independence targets completed!")
+        #             break
+        #         # Re-check energy for next iteration
+        #         energy = system.check_energy("independence")
+        #     if energy <= 0 and independence_remaining:
+        #         print("⚠ No energy left for Independence event")
         
         # Check if all targets are completed before leveling
         all_completed_check = (
             cd_remaining <= 0 and
             not pumpkin_remaining and 
-            not yinyang_remaining and 
-            not independence_remaining
+            not yinyang_remaining
+            # not independence_remaining
         )
         
         # Check stop event before starting leveling
         if hasattr(config, 'stop_event') and config.stop_event.is_set():
             break
             
-        if not all_completed_check and battles_performed:
+        if not all_completed_check:
             print("\nStarting leveling session...")
-            shadow_war_event()
-            start_leveling(20)  # Reduced from 1920 for testing
-        elif not battles_performed:
-            print("\nNo energy available for any event. Starting leveling session...")
-            shadow_war_event()
+            # shadow_war_event()
+            # start_leveling(20)  # Reduced from 1920 for testing
             start_leveling(1200)
         else:
             print("\nAll targets completed! Skipping leveling.")

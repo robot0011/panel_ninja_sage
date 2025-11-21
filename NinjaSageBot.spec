@@ -3,8 +3,18 @@ from PyInstaller.utils.hooks import collect_all
 
 datas = [('data', 'data'), ('quick_login.json', '.')]
 binaries = []
-hiddenimports = ['config', 'amf_req', 'leveling', 'eudemon', 'event', 'event_finisher', 'shadow_war', 'resources', 'utils']
+hiddenimports = ['config', 'amf_req', 'leveling', 'eudemon', 'event', 'event_finisher', 'shadow_war', 'resources', 'utils', 'tkinter', 'keyboard', 'requests', 'pycryptodome', 'py3amf', 'pyamf', 'pyamf.amf0', 'cpyamf']
 tmp_ret = collect_all('tkinter')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('keyboard')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('requests')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('pycryptodome')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('py3amf')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('pyamf')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
@@ -36,7 +46,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,
+    console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

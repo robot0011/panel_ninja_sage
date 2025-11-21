@@ -188,6 +188,7 @@ class NinjaSageGUI:
         self.root.geometry("700x600")
         self.root.resizable(True, True)
         config.main_window = self.root
+        
         # Configure style
         self.style = ttk.Style()
         self.style.configure('TFrame', background='#f0f0f0')
@@ -203,6 +204,10 @@ class NinjaSageGUI:
         self.action_thread = None
         self.stop_event = threading.Event()
         self.current_action = None
+        
+        # Initialize GUI components to avoid AttributeError
+        self.stop_btn = None
+        self.status_label = None
         
         # Create log window
         self.log_window = LogWindow(self.root)
@@ -501,6 +506,283 @@ class NinjaSageGUI:
         else:
             messagebox.showerror("Error", "Failed to load character data")
     
+    def show_enemy_selection_dialog(self, event_type):
+        """Show enemy selection dialog for events that require it"""
+        event_enemies = {
+            "pumpkin": {
+                "1": ("ene_2104", "Pumpkin Minion"),
+                "2": ("ene_2105", "Skeleton Ninja"), 
+                "3": ("ene_2106", "Zombie Samurai"),
+                "4": ("ene_2103", "Headless Pumpkin Horseman"),
+                "5": ("ene_2102", "Cursed Pumpkin King"),
+            },
+            "yinyang": {
+                "1": ("ene_2100", "Yin Tiger"),
+                "2": ("ene_2101", "Yang Dragon"),
+            }
+        }
+        
+        if event_type not in event_enemies:
+            # For events that don't require enemy selection (like CD event)
+            self.start_action(lambda: None, f"Fight {event_type.replace('_', ' ').title()} Event")
+            return
+        
+        # Create selection dialog
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"Select Enemy - {event_type.replace('_', ' ').title()} Event")
+        dialog.geometry("450x400")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.resizable(False, False)
+        
+        # Center the dialog
+        dialog.update_idletasks()
+        x = self.root.winfo_x() + (self.root.winfo_width() // 2) - (450 // 2)
+        y = self.root.winfo_y() + (self.root.winfo_height() // 2) - (400 // 2)
+        dialog.geometry(f"+{x}+{y}")
+        
+        # Main content frame
+        main_frame = ttk.Frame(dialog)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Title
+        title_label = ttk.Label(main_frame, text=f"{event_type.replace('_', ' ').title()} Event", 
+                               font=('Arial', 14, 'bold'))
+        title_label.pack(pady=(0, 15))
+        
+        # Enemy selection section
+        selection_frame = ttk.LabelFrame(main_frame, text="Select Enemy to Fight")
+        selection_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+        
+        # Enemy list with scrollbar
+        list_frame = ttk.Frame(selection_frame)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Create scrollbar
+        scrollbar = ttk.Scrollbar(list_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Enemy listbox
+        enemy_listbox = tk.Listbox(
+            list_frame, 
+            font=('Arial', 11), 
+            height=8,
+            yscrollcommand=scrollbar.set,
+            selectmode=tk.SINGLE
+        )
+        enemy_listbox.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
+        scrollbar.config(command=enemy_listbox.yview)
+        
+        # Populate enemy list
+        for num, (enemy_id, enemy_name) in event_enemies[event_type].items():
+            enemy_listbox.insert(tk.END, f"{num}. {enemy_name}")
+        
+        # Info section
+        info_frame = ttk.Frame(main_frame)
+        info_frame.pack(fill=tk.X, pady=10)
+        
+        info_label = ttk.Label(
+            info_frame, 
+            text="ℹ️  Will use all available energy for selected enemy",
+            font=('Arial', 9),
+            foreground='blue'
+        )
+        info_label.pack()
+        
+        # Button frame
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill=tk.X, pady=10)
+        
+        def start_fight():
+            selection = enemy_listbox.curselection()
+            if not selection:
+                messagebox.showwarning("Selection Required", "Please select an enemy to fight!")
+                return
+            
+            selected_index = selection[0]
+            enemy_choice = list(event_enemies[event_type].keys())[selected_index]
+            enemy_id = event_enemies[event_type][enemy_choice][0]
+            enemy_name = event_enemies[event_type][enemy_choice][1]
+            
+            # Create a wrapper function that includes the enemy selection
+            def fight_with_enemy():
+                if event_type == "pumpkin":
+                    from event import fight_pumpkin_event
+                    fight_pumpkin_event(enemy_id)  # No num_loops - uses all energy
+                elif event_type == "yinyang":
+                    from event import fight_yinyang_event
+                    fight_yinyang_event(enemy_id)  # No num_loops - uses all energy
+            
+            dialog.destroy()
+            self.start_action(fight_with_enemy, f"Fight {enemy_name}")
+        
+        def cancel():
+            dialog.destroy()
+        
+        # Fight button (primary action)
+        fight_btn = ttk.Button(
+            button_frame, 
+            text="⚔️  Start Fighting", 
+            command=start_fight,
+            style='Action.TButton',
+            width=15
+        )
+        fight_btn.pack(side=tk.RIGHT, padx=5)
+        
+        # Cancel button
+        cancel_btn = ttk.Button(
+            button_frame, 
+            text="Cancel", 
+            command=cancel,
+            width=10
+        )
+        cancel_btn.pack(side=tk.RIGHT, padx=5)
+        
+        # Bind double-click to start fight
+        enemy_listbox.bind('<Double-Button-1>', lambda e: start_fight())
+        
+        # Select first enemy by default and set focus
+        enemy_listbox.selection_set(0)
+        enemy_listbox.see(0)
+        fight_btn.focus_set()
+
+
+    def show_cd_event_dialog(self):
+        """Show CD Event confirmation dialog"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("CD Event - Confirmation")
+        dialog.geometry("400x200")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.resizable(False, False)
+        
+        # Center the dialog
+        dialog.update_idletasks()
+        x = self.root.winfo_x() + (self.root.winfo_width() // 2) - (400 // 2)
+        y = self.root.winfo_y() + (self.root.winfo_height() // 2) - (200 // 2)
+        dialog.geometry(f"+{x}+{y}")
+        
+        main_frame = ttk.Frame(dialog)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Title
+        title_label = ttk.Label(main_frame, text="Confronting Death Event", 
+                               font=('Arial', 14, 'bold'))
+        title_label.pack(pady=10)
+        
+        # Info text
+        info_label = ttk.Label(
+            main_frame, 
+            text="This will use all available CD Event energy to fight the Death Boss.",
+            font=('Arial', 10),
+            wraplength=350
+        )
+        info_label.pack(pady=10)
+        
+        warning_label = ttk.Label(
+            main_frame, 
+            text="ℹ️  Will use all available energy",
+            font=('Arial', 9),
+            foreground='blue'
+        )
+        warning_label.pack(pady=5)
+        
+        def start_fight():
+            def fight_cd():
+                from event import fight_cd_event
+                fight_cd_event()  # No num_loops - uses all energy
+            
+            dialog.destroy()
+            self.safe_start_action(fight_cd, "Fight CD Event")
+        
+        def cancel():
+            dialog.destroy()
+        
+        # Button frame
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill=tk.X, pady=15)
+        
+        fight_btn = ttk.Button(
+            button_frame, 
+            text="⚔️  Start Fighting", 
+            command=start_fight,
+            style='Action.TButton'
+        )
+        fight_btn.pack(side=tk.RIGHT, padx=5)
+        
+        cancel_btn = ttk.Button(
+            button_frame, 
+            text="Cancel", 
+            command=cancel
+        )
+        cancel_btn.pack(side=tk.RIGHT, padx=5)
+        
+        fight_btn.focus_set()
+
+    def safe_start_action(self, action_func, action_name):
+        """Safe version of start_action that works from any screen"""
+        # Auto-show log window when starting an action
+        self.show_log_window()
+        
+        # Set the stop event in config so action functions can check it
+        config.stop_event = self.stop_event
+        
+        # If we're in main menu, use the full GUI controls
+        if hasattr(self, 'stop_btn') and self.stop_btn is not None:
+            if self.action_thread and self.action_thread.is_alive():
+                messagebox.showwarning("Action Running", "Please stop the current action first")
+                return
+            
+            self.stop_event.clear()
+            self.stop_btn.config(state=tk.NORMAL)
+            self.current_action = action_name
+            self.status_label.config(text=f"🟡 Running: {action_name}...", foreground='orange')
+        else:
+            # If not in main menu, just print status
+            print(f"🟡 Starting: {action_name}...")
+            self.current_action = action_name
+        
+        def action_wrapper():
+            try:
+                action_func()
+            except Exception as e:
+                print(f"Action error: {e}")
+                self.root.after(0, lambda: self.on_action_error(str(e)))
+            finally:
+                self.root.after(0, self.on_action_finished)
+        
+        self.action_thread = threading.Thread(target=action_wrapper, daemon=True)
+        self.action_thread.start()
+
+    def start_action(self, action_func, action_name):
+        """Start an action in separate thread - for use in main menu only"""
+        if self.action_thread and self.action_thread.is_alive():
+            messagebox.showwarning("Action Running", "Please stop the current action first")
+            return
+        
+        # Auto-show log window when starting an action
+        self.show_log_window()
+        
+        self.stop_event.clear()
+        self.stop_btn.config(state=tk.NORMAL)
+        self.current_action = action_name
+        self.status_label.config(text=f"🟡 Running: {action_name}...", foreground='orange')
+        
+        # Set the stop event in config so action functions can check it
+        config.stop_event = self.stop_event
+        
+        def action_wrapper():
+            try:
+                action_func()
+            except Exception as e:
+                print(f"Action error: {e}")
+                self.root.after(0, lambda: self.on_action_error(str(e)))
+            finally:
+                self.root.after(0, self.on_action_finished)
+        
+        self.action_thread = threading.Thread(target=action_wrapper, daemon=True)
+        self.action_thread.start()
+
     def show_main_menu(self):
         """Show main menu with actions"""
         self.clear_frame()
@@ -525,24 +807,23 @@ class NinjaSageGUI:
                                      font=('Arial', 12, 'bold'), bg='#f0f0f0', fg='#2c3e50')
         actions_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
         
-        # Create action buttons
+        # Create action buttons - updated to use dialogs where needed
         actions = [
-    ("🚀 Start Leveling", start_leveling),
-    ("👹 Fight Eudemon Boss", fight_eudemon_boss),
-    ("⚡ Fight CD Event Boss", fight_cd_event),
-    ("🎃 Fight Pumpkin Event Boss", fight_pumpkin_event),
-    ("☯️ Fight Yin Yang Event Boss", fight_yinyang_event),
-    ("🎆 Fight Independence Event Boss", fight_gi_event),
-    ("⚔️ Shadow War", shadow_war_event),
-    ("🏁 Event Finisher", event_finisher),  # This now opens the config popup
-    ("🔄 Refresh Character Info", self.refresh_character_info)
-]
+            ("🚀 Start Leveling", lambda: self.start_action(start_leveling, "Start Leveling")),
+            ("👹 Fight Eudemon Boss", lambda: self.start_action(fight_eudemon_boss, "Fight Eudemon Boss")),
+            ("⚡ Fight CD Event Boss", self.show_cd_event_dialog),
+            ("🎃 Fight Pumpkin Event Boss", lambda: self.show_enemy_selection_dialog("pumpkin")),
+            ("☯️ Fight Yin Yang Event Boss", lambda: self.show_enemy_selection_dialog("yinyang")),
+            ("🏁 Event Finisher", lambda: self.start_action(event_finisher, "Event Finisher")),
+            ("🔄 Refresh Character Info", self.refresh_character_info)
+        ]
+        
         # Arrange buttons in a grid
         for i, (text, action) in enumerate(actions):
             row = i // 3
             col = i % 3
             btn = ttk.Button(actions_frame, text=text, 
-                           command=lambda a=action, t=text: self.start_action(a, t),
+                           command=action,
                            style='Action.TButton')
             btn.grid(row=row, column=col, padx=8, pady=8, sticky=tk.NSEW)
         
@@ -561,6 +842,7 @@ class NinjaSageGUI:
         stop_status_frame = ttk.Frame(control_frame)
         stop_status_frame.pack(fill=tk.X, padx=10, pady=10)
         
+        # Initialize stop_btn and status_label here
         self.stop_btn = ttk.Button(stop_status_frame, text="🛑 Stop Current Action", 
                                  command=self.stop_action, state=tk.DISABLED,
                                  style='Action.TButton')
