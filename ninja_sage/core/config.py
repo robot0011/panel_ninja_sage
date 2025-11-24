@@ -12,6 +12,7 @@ all_char = None
 char_data = None
 game_data = None
 login_data = None
+quick_login_data = None  # Store username and password for auto relogin
 
 
 battle_id = None

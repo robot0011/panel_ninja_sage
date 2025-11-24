@@ -13,6 +13,8 @@ from ..core.leveling import start_leveling
 from ..core.resources import download_all_resources
 from ..core.utils import save_to_json, open_json_to_dict
 from ..core.eudemon import fight_eudemon_boss
+from ..core.monster_hunting import MonsterHunt
+from ..core.daily import daily
 from ..core.event import (
     fight_cd_event,
     fight_pumpkin_event,
@@ -369,6 +371,8 @@ class NinjaSageGUI:
         """Perform quick login"""
         login_data = self.load_quick_login()
         if login_data:
+            # Store in config for auto relogin
+            config.quick_login_data = login_data
             self.perform_login(login_data["username"], login_data["password"])
         else:
             messagebox.showerror("Quick Login Failed", "No quick login data found")
@@ -405,6 +409,9 @@ class NinjaSageGUI:
     def save_quick_login(self, username: str, password: str):
         """Save login credentials for quick login"""
         login_data = {"username": username, "password": password}
+        # Store in config for easy access during auto relogin
+        config.quick_login_data = login_data
+        # Also save to file for persistence
         save_to_json(login_data, "quick_login")
     
     def show_character_selection(self):
@@ -794,7 +801,9 @@ class NinjaSageGUI:
         # Create action buttons - updated to use dialogs where needed
         actions = [
             ("🚀 Start Leveling", lambda: self.start_action(start_leveling, "Start Leveling")),
+            ("📅 Daily Missions", lambda: self.start_action(daily, "Daily Missions")),
             ("👹 Fight Eudemon Boss", lambda: self.start_action(fight_eudemon_boss, "Fight Eudemon Boss")),
+            ("🔫 Monster Hunting", lambda: self.start_action(MonsterHunt().run, "Monster Hunting")),
             ("⚡ Fight CD Event Boss", self.show_cd_event_dialog),
             ("🎃 Fight Pumpkin Event Boss", lambda: self.show_enemy_selection_dialog("pumpkin")),
             ("☯️ Fight Yin Yang Event Boss", lambda: self.show_enemy_selection_dialog("yinyang")),

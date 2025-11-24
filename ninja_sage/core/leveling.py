@@ -37,14 +37,13 @@ def automatic_relogin():
         if check_stop_event():
             return False
             
-        # Load quick login data
-        quick_login_data = open_json_to_dict("quick_login.json")
-        if not quick_login_data:
+        # Load quick login data from config (stored in memory during login)
+        if not config.quick_login_data:
             print("No quick login data found. Cannot auto relogin.")
             return False
         
-        username = quick_login_data.get("username")
-        password = quick_login_data.get("password")
+        username = config.quick_login_data.get("username")
+        password = config.quick_login_data.get("password")
         
         if not username or not password:
             print("Invalid quick login data.")

@@ -42,9 +42,17 @@ def fight_eudemon_boss():
     # Check stop event after API call
     if check_stop_event():
         return
-        
-    available_bosses = available_bosses_data['data']
-    available_bosses = list(map(int, available_bosses.split(",")))
+    
+    if 'data' not in available_bosses_data:
+        print("Eudemon boss response missing 'data'; skipping available boss fights.")
+        return
+
+    available_bosses_raw = available_bosses_data['data']
+    if not available_bosses_raw:
+        print("Eudemon boss response contains no boss entries; skipping available boss fights.")
+        return
+
+    available_bosses = list(map(int, available_bosses_raw.split(",")))
 
     boss = get_data_by_id("eudemon", gamedata)["data"]["bosses"]
 

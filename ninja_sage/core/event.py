@@ -317,5 +317,5 @@ def fight_yinyang_event(enemy_id: Optional[str] = None, num_loops: Optional[int]
 def fight_gi_event(enemy_id: Optional[str] = None, num_loops: Optional[int] = None):
     print("Event Finished")
     """Fight Independence Event."""
-    # system = EventBattleSystem()
-    # system.fight_event("independence", enemy_id, num_loops)
+    system = EventBattleSystem()
+    system.fight_event("independence", enemy_id, num_loops)

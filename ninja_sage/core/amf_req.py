@@ -11,7 +11,6 @@ def get_all_characters():
 
     parameters = [account_id, session_key]
     result = send_amf_request("SystemLogin.getAllCharacters", parameters)
-    # save_to_json(result,"all_chars")
     config.all_char = result
     # print(config.all_char)
     char_list = []
@@ -24,7 +23,6 @@ def get_character_data(char_id):
 
     parameters = [char_id, config.login_data['sessionkey']]
     result = send_amf_request("SystemLogin.getCharacterData", parameters)
-    # save_to_json(result,"char_data")
     config.char_data = result
     return result
                 
@@ -48,6 +46,4 @@ def login(username, password, char_dot__, char_dot__underscore):
     ]
     result = send_amf_request('SystemLogin.loginUser',params)
     #encode request
-    
-    # save_to_json(result,"login_data")
     return result
